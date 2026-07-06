@@ -10,7 +10,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, Con
 # Config
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
 NVIDIA_API_KEY = os.environ.get("NVIDIA_API_KEY", "")
-NVIDIA_MODEL = "nvidia/llama-3.3-nemotron-super-49b-v1"
+NVIDIA_MODEL = "meta/llama-3.1-8b-instruct"
 NVIDIA_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 
 logging.basicConfig(
@@ -51,7 +51,7 @@ def ask_nvidia(prompt: str) -> str:
         "max_tokens": 1024
     }
     try:
-        resp = requests.post(NVIDIA_URL, headers=headers, json=payload, timeout=30)
+        resp = requests.post(NVIDIA_URL, headers=headers, json=payload, timeout=60)
         resp.raise_for_status()
         data = resp.json()
         return data["choices"][0]["message"]["content"]
