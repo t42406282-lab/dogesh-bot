@@ -8,11 +8,11 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 
 # Config
-TELEGRAM_TOKEN = ***"TELEGRAM_TOKEN")
-NVIDIA_API_KEY = ***"NVIDIA_API_KEY")
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
+NVIDIA_API_KEY = os.environ.get("NVIDIA_API_KEY", "")
 NVIDIA_MODEL = "nvidia/llama-3.3-nemotron-super-49b-v1"
 NVIDIA_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
-PORT = int(***("PORT", "10000"))
+PORT = int(os.environ.get("PORT", "10000"))
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
