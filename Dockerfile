@@ -3,5 +3,6 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
+RUN mkdir -p /tmp/workspace /tmp/memory /tmp/images
 EXPOSE 10000
-CMD ["gunicorn", "bot:flask_app", "--bind", "0.0.0.0:10000", "--workers", "1", "--threads", "4", "--timeout", "120"]
+CMD ["gunicorn", "bot:app", "--bind", "0.0.0.0:10000", "--workers", "1", "--threads", "4", "--timeout", "180"]
