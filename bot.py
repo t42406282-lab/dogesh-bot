@@ -21,9 +21,10 @@ logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """You are a helpful, friendly AI assistant called Dogesh Bot. 
 You speak in Hinglish (mix of Hindi/Urdu and English). 
-You are casual, fun, and helpful. Keep responses concise unless asked for detail."""
+You are casual, fun, and helpful. Keep responses concise unless asked for detail.
+Be smart, witty and engaging. You can help with anything the user asks."""
 
-# Flask app for health checks
+# Flask app for Render health checks
 flask_app = Flask(__name__)
 
 @flask_app.route("/")
@@ -92,34 +93,36 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
 
 
+async def run_bot_async():
+    """Run Telegram bot properly in async context"""
+    app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+    app.add_handler(CommandHandler("start", start_cmd))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_error_handler(error_handler)
+    
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling(drop_pending_updates=True)
+    logger.info("Bot polling started!")
+    
+    # Keep running forever
+    stop_event = asyncio.Event()
+    await stop_event.wait()
+
+
 def run_telegram_bot():
-    logger.info("Starting Telegram bot in thread...")
-    
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    
-    async def start_polling():
-        app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
-        app.add_handler(CommandHandler("start", start_cmd))
-        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-        app.add_error_handler(error_handler)
-        
-        await app.initialize()
-        await app.start()
-        await app.updater.start_polling(drop_pending_updates=True)
-        logger.info("Bot polling started!")
-        
-        # Keep alive
-        while True:
-            await asyncio.sleep(3600)
-    
-    loop.run_until_complete(start_polling())
+    """Thread target - runs the bot with its own event loop"""
+    logger.info("Starting Telegram bot thread...")
+    asyncio.run(run_bot_async())
 
 
 # Start bot when module loads
+logger.info(f"TOKEN present: {bool(TELEGRAM_TOKEN)}")
+logger.info(f"NVIDIA key present: {bool(NVIDIA_API_KEY)}")
+
 if TELEGRAM_TOKEN and NVIDIA_API_KEY:
-    logger.info("Env vars OK, starting bot thread...")
     bot_thread = threading.Thread(target=run_telegram_bot, daemon=True, name="tg-bot")
     bot_thread.start()
+    logger.info("Bot thread started successfully")
 else:
-    logger.error(f"Missing env vars! TOKEN={bool(TELEGRAM_TOKEN)} NVIDIA={bool(NVIDIA_API_KEY)}")
+    logger.error("Missing TELEGRAM_TOKEN or NVIDIA_API_KEY!")
