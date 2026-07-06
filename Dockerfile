@@ -9,4 +9,4 @@ COPY . .
 
 EXPOSE 10000
 
-CMD ["python3", "bot.py"]
+CMD ["gunicorn", "bot:flask_app", "--bind", "0.0.0.0:10000", "--workers", "1", "--threads", "4", "--timeout", "120"]
