@@ -3,7 +3,7 @@ import logging
 import asyncio
 import threading
 import requests
-from flask import Flask
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 
@@ -12,6 +12,7 @@ TELEGRAM_TOKEN = ***"TELEGRAM_TOKEN")
 NVIDIA_API_KEY = ***"NVIDIA_API_KEY")
 NVIDIA_MODEL = "nvidia/llama-3.3-nemotron-super-49b-v1"
 NVIDIA_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
+PORT = int(***("PORT", "10000"))
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -19,20 +20,27 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """You are a helpful, friendly AI assistant. You speak in a mix of Hindi/Urdu and English (Hinglish) naturally. 
-You are casual, fun, and helpful. Keep responses concise unless asked for detail.
-Your name is Dogesh Bot. 🦀"""
+SYSTEM_PROMPT = """You are a helpful, friendly AI assistant called Dogesh Bot. 
+You speak in Hinglish (mix of Hindi/Urdu and English). 
+You are casual, fun, and helpful. Keep responses concise unless asked for detail."""
 
-# Flask app for Render health checks
-flask_app = Flask(__name__)
 
-@flask_app.route("/")
-def health():
-    return "Dogesh Bot is running! 🦀", 200
+# Simple HTTP health server
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain")
+        self.end_headers()
+        self.wfile.write(b"Dogesh Bot running! \xf0\x9f\x90\x95")
+    
+    def log_message(self, format, *args):
+        pass
 
-@flask_app.route("/health")
-def health_check():
-    return {"status": "ok", "bot": "running"}, 200
+
+def run_health_server():
+    server = HTTPServer(("0.0.0.0", PORT), HealthHandler)
+    logger.info(f"Health server on port {PORT}")
+    server.serve_forever()
 
 
 def ask_nvidia(prompt: str) -> str:
@@ -59,9 +67,9 @@ def ask_nvidia(prompt: str) -> str:
         return f"API Error: {str(e)}"
 
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🐕 Dogesh Bot active hai bhai!\n\nKuch bhi puchho — jawab milega!\n\nPowered by NVIDIA Nemotron 🚀"
+        "Dogesh Bot active hai!\nKuch bhi puchho - jawab milega!\nPowered by NVIDIA Nemotron"
     )
 
 
@@ -73,54 +81,47 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         await update.message.chat.send_action("typing")
         reply = ask_nvidia(user_msg)
-        logger.info(f"[Bot]: {reply[:100]}...")
+        logger.info(f"[Bot reply]: {reply[:80]}...")
         await update.message.reply_text(reply)
     except Exception as e:
-        logger.error(f"Handle message error: {e}")
-        await update.message.reply_text("❌ Kuch gadbad ho gaya. Dobara try karo.")
-
-
-async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    logger.error(f"Error: {context.error}")
-    if update and update.message:
+        logger.error(f"Message handler error: {e}")
         try:
-            await update.message.reply_text("❌ Error aaya hai. Dobara try karo.")
+            await update.message.reply_text("Error aaya hai. Dobara try karo.")
         except:
             pass
 
 
-def run_bot():
-    """Run the Telegram bot with its own event loop in a separate thread"""
-    logger.info("🤖 Telegram bot thread starting...")
-    logger.info(f"Token present: {bool(TELEGRAM_TOKEN)}")
-    logger.info(f"NVIDIA key present: {bool(NVIDIA_API_KEY)}")
+async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.error(f"Bot error: {context.error}")
+    if update and update.message:
+        try:
+            await update.message.reply_text("Error aaya hai.")
+        except:
+            pass
+
+
+def run_telegram_bot():
+    logger.info("Starting Telegram bot...")
     
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     
-    try:
-        app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
-        app.add_handler(CommandHandler("start", start))
-        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-        app.add_error_handler(error_handler)
-        
-        logger.info("🤖 Bot polling starting...")
-        app.run_polling(
-            drop_pending_updates=True,
-            close_loop=False,
-            stop_signals=None  # Don't register signal handlers in thread
-        )
-    except Exception as e:
-        logger.error(f"Bot crashed: {e}")
-        import traceback
-        traceback.print_exc()
+    app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+    app.add_handler(CommandHandler("start", start_cmd))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_error_handler(error_handler)
+    
+    logger.info("Bot polling started!")
+    app.run_polling(drop_pending_updates=True, stop_signals=None)
 
 
-# Start bot thread at import time
-logger.info("🚀 Module loaded. Starting bot thread...")
-if TELEGRAM_TOKEN and NVIDIA_API_KEY:
-    t = threading.Thread(target=run_bot, daemon=True, name="telegram-bot")
-    t.start()
-    logger.info("✅ Bot thread started")
-else:
-    logger.error(f"❌ Missing env vars - TOKEN: {bool(TELEGRAM_TOKEN)}, NVIDIA: {bool(NVIDIA_API_KEY)}")
+if __name__ == "__main__":
+    logger.info(f"TOKEN present: {bool(TELEGRAM_TOKEN)}")
+    logger.info(f"NVIDIA key present: {bool(NVIDIA_API_KEY)}")
+    
+    # Start health server
+    health_thread = threading.Thread(target=run_health_server, daemon=True)
+    health_thread.start()
+    
+    # Run bot (blocking)
+    run_telegram_bot()
